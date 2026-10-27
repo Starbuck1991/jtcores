@@ -12,6 +12,7 @@ func dump_qip(all []string) error {
 	if err != nil { return err }
 	defer fout.Close()
 	for _, each := range all {
+		each = filepath.ToSlash(each)
 		filetype := ""
 		switch filepath.Ext(each) {
 		case ".sv":

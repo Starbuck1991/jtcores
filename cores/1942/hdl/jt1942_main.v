@@ -63,6 +63,17 @@ module jt1942_main(
     input    [7:0]     prog_addr,
     input              prom_irq_we,
     input    [3:0]     prog_din
+`ifdef JTFRAME_HISCORE
+    ,input             hs_takeover_req
+    ,output            hs_takeover_ack
+    ,input             hs_mem_valid
+    ,input             hs_mem_write
+    ,input      [31:0] hs_mem_addr
+    ,input       [7:0] hs_mem_wdata
+    ,output reg        hs_mem_ready
+    ,output reg  [7:0] hs_mem_rdata
+    ,output            hs_char_we
+`endif
 );
 
 `ifndef NOMAIN
@@ -81,13 +92,32 @@ wire        irq_ack = !iorq_n && !m1_n;
 // RAM, 8kB
 wire        cpu_ram_we = ram_cs && !wr_n;
 
+`ifdef JTFRAME_HISCORE
+localparam [1:0] HS_IDLE = 2'd0, HS_WAIT = 2'd1, HS_RESP = 2'd2;
+reg  [1:0] hs_state;
+wire [7:0] hs_ram_dout;
+wire       hs_owned      = hs_takeover_req && !rst;
+wire       hs_addr_main  = hs_mem_addr[31:12] == 20'h0000e;
+wire       hs_addr_char  = hige && hs_mem_addr[31:11] == 21'h00001a;
+wire       hs_addr_valid = hs_addr_main || hs_addr_char;
+wire       hs_accept     = hs_owned && hs_mem_valid && hs_addr_valid && hs_state == HS_IDLE;
+wire       hs_ram_we     = hs_accept && hs_mem_write && hs_addr_main;
+
+assign hs_takeover_ack = hs_owned;
+assign hs_char_we      = hs_accept && hs_mem_write && hs_addr_char;
+`endif
+
 reg         hige=0;
 reg   [1:0] bank;
 
 assign irq_vector = {3'b110, int_ctrl[1:0], 3'b111 }; // Schematic K10
 assign cpu_AB     = A[12:0];
 
+`ifdef JTFRAME_HISCORE
+assign cpu_cen = cen3 && !hs_owned;
+`else
 assign cpu_cen = cen3;
+`endif
 
 always @(posedge clk) hige <= game_id==HIGEMARU;
 
@@ -232,6 +262,20 @@ always @(*) begin
     endcase
 end
 
+`ifdef JTFRAME_HISCORE
+jtframe_dual_ram #(.AW(12)) RAM(
+    .clk0       ( clk                     ),
+    .addr0      ( A[11:0]                 ),
+    .data0      ( cpu_dout                ),
+    .we0        ( cpu_ram_we && cpu_cen   ),
+    .q0         ( ram_dout                ),
+    .clk1       ( clk                     ),
+    .addr1      ( hs_mem_addr[11:0]       ),
+    .data1      ( hs_mem_wdata            ),
+    .we1        ( hs_ram_we               ),
+    .q1         ( hs_ram_dout             )
+);
+`else
 jtframe_ram #(.AW(12)) RAM(
     .clk        ( clk       ),
     .cen        ( cen3      ),
@@ -240,6 +284,36 @@ jtframe_ram #(.AW(12)) RAM(
     .we         ( cpu_ram_we),
     .q          ( ram_dout  )
 );
+`endif
+
+`ifdef JTFRAME_HISCORE
+always @(posedge clk) begin
+    if (rst || !hs_takeover_req) begin
+        hs_state     <= HS_IDLE;
+        hs_mem_ready <= 1'b0;
+        hs_mem_rdata <= 8'h00;
+    end else begin
+        case (hs_state)
+            HS_IDLE: begin
+                hs_mem_ready <= 1'b0;
+                if (hs_accept)
+                    hs_state <= HS_WAIT;
+            end
+            HS_WAIT: begin
+                hs_mem_rdata <= hs_addr_char ? char_dout : hs_ram_dout;
+                hs_mem_ready <= 1'b1;
+                hs_state     <= HS_RESP;
+            end
+            default: begin
+                if (!hs_mem_valid) begin
+                    hs_mem_ready <= 1'b0;
+                    hs_state     <= HS_IDLE;
+                end
+            end
+        endcase
+    end
+end
+`endif
 
 always @(*) begin
     cpu_din =   irq_ack ? irq_vector :
@@ -332,6 +406,14 @@ jtframe_z80 u_cpu(
     assign wr_n = 1;
     assign cpu_cen = cen3;
     assign cpu_dout = 0;
+`ifdef JTFRAME_HISCORE
+    assign hs_takeover_ack = 1'b0;
+    assign hs_char_we = 1'b0;
+    always @(*) begin
+        hs_mem_ready = 1'b0;
+        hs_mem_rdata = 8'h00;
+    end
+`endif
     initial begin
         flip = 0;
         sres_b = 0;

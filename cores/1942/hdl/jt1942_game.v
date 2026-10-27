@@ -49,10 +49,24 @@ assign pxl_cen  = cen6;
 assign debug_view = {dipsw[16], 3'b0, 1'b0, dip_flip, flip_xor, flip };
 assign dip_flip = (game_id==VULGUS & dipsw[16]) ^ flip;
 // CHAR VRAM in mem.yaml
+`ifdef JTFRAME_HISCORE
+wire hs_char_we;
+wire hs_char_access = hige && hs_takeover_req && hs_mem_valid &&
+                      hs_mem_addr[31:11] == 21'h00001a;
+wire chram_byte_sel = hs_char_access ? hs_mem_addr[10] : cpu_AB[10];
+
+assign chram_dout = chram_byte_sel ? chram_o16[15:8] : chram_o16[7:0];
+assign chram_din  = hs_char_access ? {2{hs_mem_wdata}} : {2{cpu_dout}};
+assign chram_addr = hs_char_access ? hs_mem_addr[9:0] : cpu_AB[9:0];
+assign chram_we   = hs_char_access ?
+                    ({2{hs_char_we}} & {hs_mem_addr[10],~hs_mem_addr[10]}) :
+                    ({2{char_cs&~wr_n}} & {cpu_AB[10],~cpu_AB[10]});
+`else
 assign chram_dout = cpu_AB[10] ? chram_o16[15:8] : chram_o16[7:0];
 assign chram_din  = {2{cpu_dout}};
 assign chram_addr = cpu_AB[9:0];
 assign chram_we   = {2{char_cs&~wr_n}} & {cpu_AB[10],~cpu_AB[10]};
+`endif
 assign not_higemaru = ~hige;
 
 always @(posedge clk) begin
@@ -73,6 +87,17 @@ jt1942_main u_main(
     .cen6       ( cen6          ),
     .cen3       ( cen3          ),
     .cpu_cen    ( cpu_cen       ),
+`ifdef JTFRAME_HISCORE
+    .hs_takeover_req ( hs_takeover_req ),
+    .hs_takeover_ack ( hs_takeover_ack ),
+    .hs_mem_valid    ( hs_mem_valid    ),
+    .hs_mem_write    ( hs_mem_write    ),
+    .hs_mem_addr     ( hs_mem_addr     ),
+    .hs_mem_wdata    ( hs_mem_wdata    ),
+    .hs_mem_ready    ( hs_mem_ready    ),
+    .hs_mem_rdata    ( hs_mem_rdata    ),
+    .hs_char_we      ( hs_char_we      ),
+`endif
 
     .game_id    ( game_id       ),
     // sound

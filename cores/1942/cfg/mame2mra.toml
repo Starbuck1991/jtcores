@@ -1,6 +1,27 @@
 [global]
 author=["jotego"]
 
+# Address ranges transcribed from MAME's plugins/hiscore/hiscore.dat.
+# That database credits Leezer and the Unofficial Hiscore.dat project.
+[hiscore]
+games=[
+    { machine="1942", entries=[
+        { address=0xe800, length=0x190, start=0x00, end=0x00 },
+        { address=0xe9c0, length=0x001, start=0x1e, end=0x1e },
+        { address=0xe040, length=0x008, start=0x00, end=0x00 },
+        { address=0xe028, length=0x001, start=0x01, end=0x01 },
+    ] },
+    { machine="vulgus", entries=[
+        { address=0xee00, length=0x041, start=0x00, end=0x2e },
+        { address=0xee47, length=0x003, start=0x00, end=0x00 },
+    ] },
+    { machine="higemaru", entries=[
+        { address=0xee00, length=0x082, start=0x00, end=0x4f },
+        { address=0xee97, length=0x003, start=0x00, end=0x00 },
+        { address=0xd04e, length=0x007, start=0x20, end=0x30 },
+    ] },
+]
+
 [parse]
 sourcefile=[ "1942.cpp", "vulgus.cpp", "higemaru.cpp" ]
 skip.setnames=[

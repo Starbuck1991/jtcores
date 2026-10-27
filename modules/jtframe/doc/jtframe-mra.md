@@ -180,6 +180,18 @@ nvram = {
 	# if a ROM region with the name "nvram" exists, and no default data
 	# was specified, it will be loaded here
 }
+
+# Optional MAME hiscore.dat-compatible profiles. Each machine entry also
+# applies to its clones. The defaults encode the timing header used by the
+# MiSTer hiscore module; any timing field can be overridden per game.
+[hiscore]
+# config_index and data_index are optional. Their defaults are 5 and 6, or
+# JTFRAME_HISCORE_CFGIDX and JTFRAME_HISCORE_DATAIDX when those macros exist.
+games=[
+	{ machine="1942", entries=[
+		{ address=0xe800, length=0x190, start=0x00, end=0x00 },
+	] },
+]
 # split ROM regions in two halves. Each ROM file is split in two
 # and each half is merged independently
 splits=[

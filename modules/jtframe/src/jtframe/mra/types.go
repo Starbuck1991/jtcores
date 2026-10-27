@@ -250,7 +250,12 @@ type GlobalCfg struct {
 }
 
 type Mame2MRA struct {
-	Global GlobalCfg
+	Global  GlobalCfg
+	Hiscore struct {
+		Config_index int
+		Data_index   int
+		Games        []HiscoreCfg
+	}
 
 	Pocket struct {
 		Display_modes []int
@@ -326,6 +331,19 @@ type Mame2MRA struct {
 	}
 }
 
+type HiscoreCfg struct {
+	Selectable
+	Start_wait, Check_wait, Check_hold, Write_hold int
+	Write_repeat, Write_repeat_wait, Pause_padding int
+	Change_mask                                    int
+	Entries                                        []HiscoreEntry
+}
+
+type HiscoreEntry struct {
+	Address            uint32
+	Length, Start, End int
+}
+
 type VolumeCfg struct {
 	Selectable
 	Value int
@@ -358,12 +376,12 @@ type DipswCfgRename struct {
 }
 
 type ParsedMachine struct {
-	machine   *MachineXML
-	mra_xml   *XMLNode
-	cloneof   bool
-	def_dipsw string
-	coremod   int
-	err       error
+	machine     *MachineXML
+	mra_xml     *XMLNode
+	cloneof     bool
+	def_dipsw   string
+	coremod     int
+	err         error
 	rom_regions []string // Original MAME region names, before TOML renaming.
 }
 

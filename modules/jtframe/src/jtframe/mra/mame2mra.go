@@ -678,6 +678,7 @@ func make_mra(machine *MachineXML, cfg Mame2MRA, args Args) (*XMLNode, string, i
 	// ROM load
 	e := make_ROM(root, machine, cfg, args)
 	if e != nil { return nil, "", 0, e }
+	if e = make_hiscore(root, machine, cfg); e != nil { return nil, "", 0, e }
 	e = MakeMRAChecker(root, machine).Check()
 	if e != nil { return nil, "", 0, e }
 	// Beta

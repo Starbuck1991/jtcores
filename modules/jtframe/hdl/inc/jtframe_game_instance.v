@@ -194,6 +194,17 @@ u_game(
     .sav_dout   ( sav_dout      ),
     .sav_addr   ( sav_addr      ),
 `endif
+`ifdef JTFRAME_HISCORE
+    // High-score memory access
+    .hs_takeover_req( hs_takeover_req ),
+    .hs_takeover_ack( hs_takeover_ack ),
+    .hs_mem_valid   ( hs_mem_valid    ),
+    .hs_mem_write   ( hs_mem_write    ),
+    .hs_mem_addr    ( hs_mem_addr     ),
+    .hs_mem_wdata   ( hs_mem_wdata    ),
+    .hs_mem_ready   ( hs_mem_ready    ),
+    .hs_mem_rdata   ( hs_mem_rdata    ),
+`endif
     // common ROM-load interface
     .prog_addr  ( prog_addr     ),
     .prog_rd    ( prog_rd       ),

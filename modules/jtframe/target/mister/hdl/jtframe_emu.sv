@@ -372,6 +372,33 @@ wire [31:0] dipsw;
 wire        ioctl_wr;
 wire [26:0] ioctl_addr; // up to 128MB
 wire [ 7:0] ioctl_dout, ioctl_din;
+`ifdef JTFRAME_HISCORE
+wire        hs_cfg_download, hs_data_download, hs_data_upload, hs_ioctl_wr;
+wire [26:0] hs_ioctl_addr;
+wire [ 7:0] hs_ioctl_dout;
+wire [ 7:0] hs_ioctl_din;
+wire        hs_upload_req;
+wire        hs_takeover_req;
+wire        hs_takeover_ack;
+wire        hs_mem_valid;
+wire        hs_mem_write;
+wire [31:0] hs_mem_addr;
+wire [ 7:0] hs_mem_wdata;
+wire        hs_mem_ready;
+wire [ 7:0] hs_mem_rdata;
+wire        hs_configured;
+wire        hs_save_busy;
+`ifdef JTFRAME_HISCORE_SCOREW
+localparam HS_SCOREWIDTH = `JTFRAME_HISCORE_SCOREW;
+`else
+localparam HS_SCOREWIDTH = 9; // 512 bytes; 1942 needs 410
+`endif
+`ifdef JTFRAME_HISCORE_AUTOSAVE
+wire hs_autosave = status[27];
+`else
+wire hs_autosave = 1'b0;
+`endif
+`endif
 
 wire [ 9:0] game_joy1, game_joy2, game_joy3, game_joy4;
 wire [ 3:0] game_coin, game_start;
@@ -450,6 +477,37 @@ wire [ 7:0] game_ddr_burstcnt, game_ddr_be;
 wire [28:0] game_ddr_addr;
 wire        game_ddr_rd, game_ddr_we, game_ddr_busy, game_ddr_dout_ready;
 wire [63:0] game_ddr_din, game_ddr_dout;
+`endif
+
+`ifdef JTFRAME_HISCORE
+jtframe_hiscore #(
+    .HS_SCOREWIDTH   ( HS_SCOREWIDTH ),
+    .CFG_ADDRESSWIDTH( 4             ),
+    .CFG_LENGTHWIDTH ( 2             )
+) u_hiscore(
+    .clk             ( clk_rom          ),
+    .reset           ( game_rst         ),
+    .autosave        ( hs_autosave      ),
+    .cfg_download    ( hs_cfg_download  ),
+    .data_download   ( hs_data_download ),
+    .data_upload     ( hs_data_upload   ),
+    .ioctl_upload_req( hs_upload_req    ),
+    .ioctl_wr        ( hs_ioctl_wr      ),
+    .ioctl_addr      ( hs_ioctl_addr    ),
+    .OSD_STATUS      ( OSD_STATUS       ),
+    .data_from_hps   ( hs_ioctl_dout    ),
+    .data_to_hps     ( hs_ioctl_din     ),
+    .takeover_req    ( hs_takeover_req  ),
+    .takeover_ack    ( hs_takeover_ack  ),
+    .mem_valid       ( hs_mem_valid     ),
+    .mem_write       ( hs_mem_write     ),
+    .mem_addr        ( hs_mem_addr      ),
+    .mem_wdata       ( hs_mem_wdata     ),
+    .mem_ready       ( hs_mem_ready     ),
+    .mem_rdata       ( hs_mem_rdata     ),
+    .save_busy       ( hs_save_busy     ),
+    .configured      ( hs_configured    )
+);
 `endif
 
 jtframe_mister #(
@@ -624,6 +682,18 @@ u_frame(
     .ioctl_wr       ( ioctl_wr       ),
     .ioctl_ram      ( ioctl_ram      ),
     .ioctl_din      ( ioctl_din      ),
+`ifdef JTFRAME_HISCORE
+    .hs_cfg_download ( hs_cfg_download  ),
+    .hs_data_download( hs_data_download ),
+    .hs_data_upload  ( hs_data_upload   ),
+    .hs_ioctl_wr     ( hs_ioctl_wr      ),
+    .hs_ioctl_addr   ( hs_ioctl_addr    ),
+    .hs_ioctl_dout   ( hs_ioctl_dout    ),
+    .hs_ioctl_din    ( hs_ioctl_din     ),
+    .hs_upload_req   ( hs_upload_req    ),
+    .hs_configured   ( hs_configured    ),
+    .hs_save_busy    ( hs_save_busy     ),
+`endif
 
     .ioctl_rom      ( ioctl_rom      ),
     .ioctl_cart     ( ioctl_cart     ),

@@ -126,6 +126,19 @@ module jtframe_mister #(parameter
     // NVRAM
     input        [ 7:0] ioctl_din,
     output              ioctl_ram,
+`ifdef JTFRAME_HISCORE
+    // Persistent high-score transport
+    output              hs_cfg_download,
+    output              hs_data_download,
+    output              hs_data_upload,
+    output              hs_ioctl_wr,
+    output       [26:0] hs_ioctl_addr,
+    output       [ 7:0] hs_ioctl_dout,
+    input        [ 7:0] hs_ioctl_din,
+    input               hs_upload_req,
+    input               hs_configured,
+    input               hs_save_busy,
+`endif
 
     input               dwnld_busy,
     output              ioctl_rom,
@@ -263,6 +276,21 @@ wire [15:0] hps_index;
 wire [26:0] hps_addr;
 wire [ 7:0] hps_dout;
 
+`ifdef JTFRAME_HISCORE
+localparam [7:0] HS_CFG_INDEX =
+`ifdef JTFRAME_HISCORE_CFGIDX
+    `JTFRAME_HISCORE_CFGIDX;
+`else
+    8'd5;
+`endif
+localparam [7:0] HS_DATA_INDEX =
+`ifdef JTFRAME_HISCORE_DATAIDX
+    `JTFRAME_HISCORE_DATAIDX;
+`else
+    8'd6;
+`endif
+`endif
+
 // Screen rotation
 wire [ 7:0] rot_burstcnt;
 wire [28:0] rot_addr;
@@ -392,7 +420,12 @@ reg         framebuf_flip;      // extra OSD options for rotation, bit 0 = rotat
 wire [15:0] status_menumask; // a high value hides the menu item
 wire        vertical;
 
-assign status_menumask[15:7] = 0,
+assign status_menumask[15:8] = 0,
+`ifdef JTFRAME_HISCORE_AUTOSAVE
+       status_menumask[7]    = hs_configured,
+`else
+       status_menumask[7]    = 0,
+`endif
        status_menumask[6]    = ~lightgun_en, // sinden lightgun borders
        status_menumask[5]    = crop_ok, // video crop options
 `ifdef JTFRAME_ROTATE       // extra rotate options for vertical games
@@ -455,7 +488,7 @@ jtframe_mister_dwnld u_dwnld(
     .ddram_rd       ( ddrld_rd         )
 );
 
-wire [7:0] hps_din;
+wire [7:0] hps_din, base_hps_din;
 wire [15:0] joyusb_1, joyusb_2;
 
 
@@ -500,10 +533,43 @@ assign joystick2 = joyusb_2;
 
         // Let data be dumped via NVRAM interface
         .ioctl_addr ( ioctl_addr    ),
-        .ioctl_din  ( hps_din       )
+        .ioctl_din  ( base_hps_din  )
     );
 `else
-    assign hps_din = ioctl_din;
+    assign base_hps_din = ioctl_din;
+`endif
+
+wire       hps_upload_req;
+wire [7:0] hps_upload_index;
+
+`ifdef JTFRAME_HISCORE
+jtframe_hiscore_ioctl #(
+    .CFG_INDEX  ( HS_CFG_INDEX  ),
+    .DATA_INDEX ( HS_DATA_INDEX )
+) u_hiscore_ioctl(
+    .ioctl_download    ( hps_download     ),
+    .ioctl_upload      ( hps_upload       ),
+    .ioctl_wr          ( hps_wr           ),
+    .ioctl_index       ( hps_index[7:0]   ),
+    .ioctl_addr        ( hps_addr         ),
+    .ioctl_dout        ( hps_dout         ),
+    .base_din          ( base_hps_din     ),
+    .ioctl_din         ( hps_din          ),
+    .cfg_download      ( hs_cfg_download  ),
+    .data_download     ( hs_data_download ),
+    .data_upload       ( hs_data_upload   ),
+    .hs_wr             ( hs_ioctl_wr      ),
+    .hs_addr           ( hs_ioctl_addr    ),
+    .hs_dout           ( hs_ioctl_dout    ),
+    .hs_din            ( hs_ioctl_din     ),
+    .hs_upload_req     ( hs_upload_req    ),
+    .ioctl_upload_req  ( hps_upload_req   ),
+    .ioctl_upload_index( hps_upload_index )
+);
+`else
+assign hps_din          = base_hps_din;
+assign hps_upload_req   = 1'b0;
+assign hps_upload_index = 8'd0;
 `endif
 
 hps_io #(
@@ -527,8 +593,14 @@ hps_io #(
     .ioctl_dout      ( hps_dout       ),
     .ioctl_din       ( hps_din        ),
     .ioctl_index     ( hps_index      ),
-    .ioctl_wait      ( hps_wait     | sd_wait  ),
+    .ioctl_wait      ( hps_wait | sd_wait
+`ifdef JTFRAME_HISCORE
+                       | hs_save_busy
+`endif
+                     ),
     .ioctl_upload    ( hps_upload     ),
+    .ioctl_upload_req( hps_upload_req ),
+    .ioctl_upload_index(hps_upload_index),
     // NVRAM support
     .ioctl_rd        (                ), // no need
     `ifdef JTFRAME_SAVEGAME

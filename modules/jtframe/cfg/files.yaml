@@ -1,4 +1,8 @@
 jtframe:
+  - from: hiscore
+    when: [ JTFRAME_HISCORE ]
+    get:
+      - jtframe_hiscore.v
   - get:
       - jtframe_board.v
       - jtframe_board_sdram.v

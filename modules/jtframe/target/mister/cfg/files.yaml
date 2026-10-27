@@ -42,6 +42,10 @@ jtframe/target/mister:
     get:
       - sdram_clk48.sdc
 jtframe:
+  - from: hiscore
+    when: [ JTFRAME_HISCORE ]
+    get:
+      - jtframe_hiscore_ioctl.v
   - from: sdram
     get:
     - jtframe_shadow.v

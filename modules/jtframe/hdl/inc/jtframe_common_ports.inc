@@ -100,3 +100,14 @@
     input     [15:0]  sav_dout,
     input     [15:0]  sav_addr,
 `endif
+`ifdef JTFRAME_HISCORE
+    // Generic high-score memory access contract
+    input             hs_takeover_req,
+    output            hs_takeover_ack,
+    input             hs_mem_valid,
+    input             hs_mem_write,
+    input     [31:0]  hs_mem_addr,
+    input      [7:0]  hs_mem_wdata,
+    output            hs_mem_ready,
+    output     [7:0]  hs_mem_rdata,
+`endif

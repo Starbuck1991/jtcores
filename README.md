@@ -1,5 +1,9 @@
 # JTCORES FPGA Arcade Hardware by Jose Tejada (@topapate)
 
+> **Unofficial high-score fork:** the `feature/jtframe-hiscore` branch adds an
+> optional, reusable high-score persistence layer for JTFRAME. See
+> [HISCORE.md](HISCORE.md) for scope, attribution and tested games.
+
 You can show your appreciation through
 * [Patreon](https://patreon.com/jotego)
 * [Paypal](https://paypal.me/topapate)

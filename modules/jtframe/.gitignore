@@ -15,4 +15,5 @@ lut2hex
 msg2hex
 reverse_bits
 src/jtframe/jtframe
+src/jtframe/jtframe.exe
 src/jtutil/jtutil

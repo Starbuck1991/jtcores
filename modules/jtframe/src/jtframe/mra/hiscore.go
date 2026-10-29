@@ -47,15 +47,7 @@ func make_hiscore(root *XMLNode, machine *MachineXML, cfg Mame2MRA) error {
 	}
 
 	setHiscoreDefaults(&game)
-	raw := make([]byte, 0, 16+8*len(game.Entries))
-	raw = append32(raw, game.Start_wait)
-	raw = append16(raw, game.Check_wait)
-	raw = append16(raw, game.Check_hold)
-	raw = append16(raw, game.Write_hold)
-	raw = append16(raw, game.Write_repeat)
-	raw = append16(raw, game.Write_repeat_wait)
-	raw = append(raw, byte(game.Pause_padding), byte(game.Change_mask))
-
+	entries := make([]byte, 0, 8*len(game.Entries))
 	total := 0
 	for _, entry := range game.Entries {
 		if entry.Address > 0xffffff {
@@ -68,12 +60,12 @@ func make_hiscore(root *XMLNode, machine *MachineXML, cfg Mame2MRA) error {
 			return fmt.Errorf("hiscore entry at %08X has a validation byte outside 00-FF", entry.Address)
 		}
 		total += entry.Length
-		raw = append32(raw, int(entry.Address))
-		raw = append16(raw, entry.Length)
-		raw = append(raw, byte(entry.Start), byte(entry.End))
+		entries = append32(entries, int(entry.Address))
+		entries = append16(entries, entry.Length)
+		entries = append(entries, byte(entry.Start), byte(entry.End))
 	}
 	if game.Change_mask != 0 {
-		return fmt.Errorf("hiscore profile for %s requests a change mask, but mask data is not yet supported", machine.Name)
+		return fmt.Errorf("hiscore profile for %s uses deprecated change_mask; use ignore_changes offsets", machine.Name)
 	}
 	scoreWidth := hiscoreMacroOrDefault("JTFRAME_HISCORE_SCOREW", defaultHiscoreScoreWidth)
 	if scoreWidth < 1 || scoreWidth > 30 {
@@ -84,11 +76,60 @@ func make_hiscore(root *XMLNode, machine *MachineXML, cfg Mame2MRA) error {
 		return fmt.Errorf("hiscore profile for %s uses %d bytes; maximum is %d",
 			machine.Name, total, maxHiscoreData)
 	}
+	changeMask, err := makeHiscoreChangeMask(machine.Name, game.Ignore_changes, total, maxHiscoreData)
+	if err != nil {
+		return err
+	}
+
+	raw := make([]byte, 0, 16+len(changeMask)+len(entries))
+	raw = append32(raw, game.Start_wait)
+	raw = append16(raw, game.Check_wait)
+	raw = append16(raw, game.Check_hold)
+	raw = append16(raw, game.Write_hold)
+	raw = append16(raw, game.Write_repeat)
+	raw = append16(raw, game.Write_repeat_wait)
+	raw = append(raw, byte(game.Pause_padding), byte(len(changeMask)))
+	raw = append(raw, changeMask...)
+	raw = append(raw, entries...)
 
 	root.AddNode("rom").AddIntAttr("index", configIndex).AddAttr("md5", "none").
 		AddNode("part").SetText("\n" + hexdump(raw, 16))
 	root.AddNode("nvram").AddIntAttr("index", dataIndex).AddIntAttr("size", total)
 	return nil
+}
+
+func makeHiscoreChangeMask(machine string, ignored []int, total, capacity int) ([]byte, error) {
+	if len(ignored) == 0 {
+		return nil, nil
+	}
+
+	highest := 0
+	for _, offset := range ignored {
+		if offset < 0 || offset >= total {
+			return nil, fmt.Errorf("hiscore profile for %s ignores offset %d outside its %d-byte data", machine, offset, total)
+		}
+		if offset >= capacity {
+			return nil, fmt.Errorf("hiscore profile for %s ignores offset %d beyond the %d-byte score buffer", machine, offset, capacity)
+		}
+		if offset > highest {
+			highest = offset
+		}
+	}
+
+	// The legacy format locates table entries in 8-byte rows, so the mask
+	// length must also occupy a whole number of rows.
+	maskBytes := ((highest/8 + 1) + 7) &^ 7
+	if maskBytes > 248 {
+		return nil, fmt.Errorf("hiscore profile for %s needs a %d-byte change mask; maximum is 248", machine, maskBytes)
+	}
+	mask := make([]byte, maskBytes)
+	for k := range mask {
+		mask[k] = 0xff
+	}
+	for _, offset := range ignored {
+		mask[offset/8] &^= byte(1 << uint(offset&7))
+	}
+	return mask, nil
 }
 
 func hiscoreMacroOrDefault(name string, fallback int) int {

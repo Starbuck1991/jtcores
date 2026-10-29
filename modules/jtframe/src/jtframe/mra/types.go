@@ -336,6 +336,7 @@ type HiscoreCfg struct {
 	Start_wait, Check_wait, Check_hold, Write_hold int
 	Write_repeat, Write_repeat_wait, Pause_padding int
 	Change_mask                                    int
+	Ignore_changes                                 []int
 	Entries                                        []HiscoreEntry
 }
 

@@ -223,7 +223,7 @@ reg	[CFG_ADDRESSWIDTH-1:0]		total_entries = 1'b0;	// Total count of config table
 reg										restore_pending = 1'b0;	// NVRAM loaded or game reset; restore when the game is ready
 reg	[7:0]								write_counter = 1'b0;	// Index of current game RAM write attempt
 
-reg	[255:0]							change_mask;				// Bit mask for dump change check
+reg	[(1<<HS_SCOREWIDTH)-1:0]		change_mask;				// Bit mask for dump change check
 
 reg										last_cfg_download = 0;
 reg										last_data_download = 0;
@@ -250,7 +250,9 @@ reg										buffer_write = 1'b0;
 reg	[19:0]							compare_length = 1'b0;
 reg										compare_nonzero = 1'b1;	// High after extract and compare if any byte returned is non-zero
 reg										compare_changed = 1'b1;	// High after extract and compare if any byte is different to current hiscore data
-wire										check_mask = change_mask[compare_length]/* synthesis keep */;
+wire [19:0]						change_mask_bits = {12'd0, CHANGEMASK} << 3;
+wire										check_mask = (CHANGEMASK == 0 || compare_length >= change_mask_bits) ?
+												1'b1 : change_mask[compare_length[HS_SCOREWIDTH-1:0]]/* synthesis keep */;
 reg										dump_dirty = 1'b0;		// High if dump has changed since last save (or first load if no save has occurred)
 
 wire [23:0]								address_data_in;
@@ -336,7 +338,7 @@ assign data_to_hps = hiscore_data_out;
 
 wire [3:0] header_chunk = ioctl_addr[3:0];
 wire [7:0] mask_chunk = ioctl_addr[7:0] - 5'd16;
-wire [255:0] mask_load_index = mask_chunk * 8;
+wire [HS_SCOREWIDTH-1:0] mask_load_index = mask_chunk << 3;
 
 always @(posedge clk)
 begin
@@ -504,7 +506,7 @@ begin
 					SM_COMPAREDONE:
 						begin
 							// If RAM data has changed since last dump and there is either no mask or a 1 in the mask for this address
-							if (read_data != hiscore_data_out && (CHANGEMASK==8'b0 || check_mask==1))
+							if (read_data != hiscore_data_out && check_mask == 1'b1)
 							begin
 								// Hiscore data changed
 								compare_changed <= 1'b1;

@@ -14,7 +14,6 @@ const (
 	defaultHiscoreConfigIndex = 5
 	defaultHiscoreDataIndex   = 6
 	defaultHiscoreScoreWidth  = 9
-	maxHiscoreEntries         = 16
 )
 
 func make_hiscore(root *XMLNode, machine *MachineXML, cfg Mame2MRA) error {
@@ -29,9 +28,14 @@ func make_hiscore(root *XMLNode, machine *MachineXML, cfg Mame2MRA) error {
 	if len(game.Entries) == 0 {
 		return fmt.Errorf("hiscore profile for %s has no entries", machine.Name)
 	}
-	if len(game.Entries) > maxHiscoreEntries {
+	cfgWidth := hiscoreMacroOrDefault("JTFRAME_HISCORE_CFGW", 4)
+	if cfgWidth < 1 || cfgWidth > 8 {
+		return fmt.Errorf("JTFRAME_HISCORE_CFGW has invalid value %d", cfgWidth)
+	}
+	entryLimit := 1 << cfgWidth
+	if len(game.Entries) > entryLimit {
 		return fmt.Errorf("hiscore profile for %s has %d entries; maximum is %d",
-			machine.Name, len(game.Entries), maxHiscoreEntries)
+			machine.Name, len(game.Entries), entryLimit)
 	}
 
 	configIndex := cfg.Hiscore.Config_index

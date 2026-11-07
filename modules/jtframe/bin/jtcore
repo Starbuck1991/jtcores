@@ -152,7 +152,7 @@ case $TARGET in
             fi
         fi;;
     *)
-        if ! (which quartus_sh|grep intelFPGA_lite -q); then
+        if ! command -v quartus_sh >/dev/null 2>&1; then
             PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:.
             if [ -d /opt/intelFPGA_lite ]; then
                 cd /opt/intelFPGA_lite

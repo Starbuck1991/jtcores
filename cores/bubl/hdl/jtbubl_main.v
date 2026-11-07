@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Jose Tejada Gomez
+ * SPDX-FileCopyrightText: 2026 J. M. Artés (adaptación de hiscores)
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Date: 1-06-2020 */
 
@@ -63,6 +64,16 @@ module jtbubl_main(
     input      [ 7:0]   dipsw_a,
     input      [ 7:0]   dipsw_b,
     input      [ 7:0]   debug_bus
+`ifdef JTFRAME_HISCORE
+    ,input             hs_takeover_req
+    ,output            hs_takeover_ack
+    ,input             hs_mem_valid
+    ,input             hs_mem_write
+    ,input      [31:0] hs_mem_addr
+    ,input       [7:0] hs_mem_wdata
+    ,output reg        hs_mem_ready
+    ,output reg  [7:0] hs_mem_rdata
+`endif
 );
 
 `ifndef NOMAIN
@@ -99,8 +110,71 @@ wire [ 7:0] work2main_dout, work2sub_dout;
 wire        sub_m1_n, main_m1_n;
 wire        cen_mcu = tokio ? cen3 : cen4;
 
+reg         lde, sde; // Arbitraje original de la RAM compartida.
+
+// Both Z80s finish their current bus cycle before the shared RAM is borrowed.
+`ifdef JTFRAME_HISCORE
+wire main_busak_n, sub_busak_n;
+// La ROM prueba y borra la RAM antes de inicializar los récords. E64E sola
+// no es una señal válida: también recibe escrituras durante ese test.
+// Esperar a la firma final de la tabla y después a la inicialización superior.
+reg hs_table_initialized, hs_game_initialized;
+always @(posedge clk) begin
+    if (rst || !main_rst_n) begin
+        hs_table_initialized <= 1'b0;
+        hs_game_initialized <= 1'b0;
+    end else if (!main_wrn && lde) begin
+        if (main_addr == 16'he676 && main_dout == 8'h48)
+            hs_table_initialized <= 1'b1;
+        if (hs_table_initialized && main_addr == 16'he64e)
+            hs_game_initialized <= 1'b1;
+    end
+end
+// La principal necesita ejecutar para liberar el reset de la secundaria.
+wire hs_request = hs_takeover_req && !rst && main_rst_n && sub_rst_n &&
+                  (tokio || hs_game_initialized);
+wire hs_owned = hs_request && !main_busak_n && !sub_busak_n;
+wire hs_addr_valid = hs_mem_addr >= 32'he000 && hs_mem_addr < 32'hf800;
+localparam [1:0] HS_IDLE=0, HS_WAIT=1, HS_RESP=2;
+reg [1:0] hs_state;
+wire hs_accept = hs_owned && hs_mem_valid && hs_state == HS_IDLE;
+wire hs_ram_we = hs_accept && hs_mem_write && hs_addr_valid;
+wire [12:0] work_addr0 = hs_owned ? hs_mem_addr[12:0] : main_addr[12:0];
+wire [7:0] work_data0 = hs_owned ? hs_mem_wdata : main_dout;
+wire work_we0 = hs_owned ? hs_ram_we : (~main_wrn & lde);
+wire work_we1 = !hs_owned && ~sub_wrn && sub_work_cs;
+assign hs_takeover_ack = hs_owned;
+always @(posedge clk) begin
+    if (rst || !hs_request) begin
+        hs_state <= HS_IDLE;
+        hs_mem_ready <= 0;
+        hs_mem_rdata <= 0;
+    end else case (hs_state)
+        HS_IDLE: begin
+            hs_mem_ready <= 0;
+            if (hs_accept) hs_state <= HS_WAIT;
+        end
+        HS_WAIT: begin
+            hs_mem_rdata <= hs_addr_valid ? work2main_dout : 8'hff;
+            hs_mem_ready <= 1;
+            hs_state <= HS_RESP;
+        end
+        default: if (!hs_mem_valid) begin
+            hs_mem_ready <= 0;
+            hs_state <= HS_IDLE;
+        end
+    endcase
+end
+`else
+wire main_busak_n, sub_busak_n;
+wire hs_request = 1'b0;
+wire [12:0] work_addr0 = main_addr[12:0];
+wire [7:0] work_data0 = main_dout;
+wire work_we0 = ~main_wrn & lde;
+wire work_we1 = ~sub_wrn & sub_work_cs;
+`endif
+
 wire        main_halt_n;
-reg         lde, sde; // original signal names: lde = main drives, sde = sub drives
 wire        VBL_gated;
 wire        sub_int_ack, main_int_ack;
 
@@ -260,15 +334,15 @@ end
 // Time shared
 jtframe_dual_ram #(.AW(13)) u_work(
     .clk0   ( clk             ),
-    .data0  ( main_dout       ),
-    .addr0  ( main_addr[12:0] ),
-    .we0    ( ~main_wrn & lde ),
+    .data0  ( work_data0      ),
+    .addr0  ( work_addr0      ),
+    .we0    ( work_we0        ),
     .q0     ( work2main_dout  ),
     // Sub CPU
     .clk1   ( clk             ),
     .data1  ( sub_dout        ),
     .addr1  ( sub_addr[12:0]  ),
-    .we1    ( ~sub_wrn & sub_work_cs       ),
+    .we1    ( work_we1        ),
     .q1     ( work2sub_dout   )
 );
 
@@ -311,7 +385,7 @@ jtframe_z80 u_maincpu(
     .wait_n   ( 1'b1           ),
     .int_n    ( main_int_n     ),
     .nmi_n    ( 1'b1           ),
-    .busrq_n  ( 1'b1           ),
+    .busrq_n  ( ~hs_request    ),
     .m1_n     ( main_m1_n      ),
     .mreq_n   ( main_mreq_n    ),
     .iorq_n   ( main_iorq_n    ),
@@ -319,7 +393,7 @@ jtframe_z80 u_maincpu(
     .wr_n     ( main_wrn       ),
     .rfsh_n   ( main_rfsh_n    ),
     .halt_n   ( main_halt_n    ),
-    .busak_n  (                ),
+    .busak_n  ( main_busak_n   ),
     .A        ( main_addr      ),
     .din      ( main_din       ),
     .dout     ( main_dout      )
@@ -336,7 +410,7 @@ jtframe_z80wait #(.DEVCNT(1),.RECOVERY(0)) u_mainwait(
     // cycle recovery
     .mreq_n   ( main_mreq_n     ),
     .iorq_n   ( main_iorq_n     ),
-    .busak_n  ( 1'b1            ),
+    .busak_n  ( main_busak_n    ),
     .dev_busy ( main_wait       ),
     // SDRAM gating managed in mem.yaml
     .rom_cs   ( 1'b0            ),
@@ -353,7 +427,7 @@ jtframe_z80 u_subcpu(
     .wait_n   ( 1'b1           ),
     .int_n    ( sub_int_n      ),
     .nmi_n    ( ~main2sub_nmi  ),
-    .busrq_n  ( 1'b1           ),
+    .busrq_n  ( ~hs_request    ),
     .m1_n     ( sub_m1_n       ),
     .mreq_n   ( sub_mreq_n     ),
     .iorq_n   ( sub_iorq_n     ),
@@ -361,7 +435,7 @@ jtframe_z80 u_subcpu(
     .wr_n     ( sub_wrn        ),
     .rfsh_n   ( sub_rfsh_n     ),
     .halt_n   (                ),
-    .busak_n  (                ),
+    .busak_n  ( sub_busak_n    ),
     .A        ( sub_addr       ),
     .din      ( sub_din        ),
     .dout     ( sub_dout       )
@@ -378,7 +452,7 @@ jtframe_z80wait #(.DEVCNT(1),.RECOVERY(0)) u_subwait(
     // cycle recovery
     .mreq_n   ( sub_mreq_n      ),
     .iorq_n   ( sub_iorq_n      ),
-    .busak_n  ( 1'b1            ),
+    .busak_n  ( sub_busak_n     ),
     .dev_busy ( sub_wait        ),
     // SDRAM gating managed in mem.yaml
     .rom_cs   ( 1'b0            ),

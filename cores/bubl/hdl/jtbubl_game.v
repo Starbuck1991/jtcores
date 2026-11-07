@@ -46,6 +46,16 @@ jtbubl_main u_main(
     .cen6           ( cen6          ),
     .cen4           ( cen4          ),
     .cen3           ( cen3          ),
+`ifdef JTFRAME_HISCORE
+    .hs_takeover_req ( hs_takeover_req ),
+    .hs_takeover_ack ( hs_takeover_ack ),
+    .hs_mem_valid    ( hs_mem_valid    ),
+    .hs_mem_write    ( hs_mem_write    ),
+    .hs_mem_addr     ( hs_mem_addr     ),
+    .hs_mem_wdata    ( hs_mem_wdata    ),
+    .hs_mem_ready    ( hs_mem_ready    ),
+    .hs_mem_rdata    ( hs_mem_rdata    ),
+`endif
 
     .tokio          ( tokio         ),
     .bootleg        ( bootleg       ),

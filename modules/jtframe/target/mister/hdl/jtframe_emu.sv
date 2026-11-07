@@ -393,6 +393,11 @@ localparam HS_SCOREWIDTH = `JTFRAME_HISCORE_SCOREW;
 `else
 localparam HS_SCOREWIDTH = 9; // 512 bytes; 1942 needs 410
 `endif
+`ifdef JTFRAME_HISCORE_CFGW
+localparam HS_CFGWIDTH = `JTFRAME_HISCORE_CFGW;
+`else
+localparam HS_CFGWIDTH = 4;
+`endif
 `ifdef JTFRAME_HISCORE_AUTOSAVE
 wire hs_autosave = status[27];
 `else
@@ -482,7 +487,7 @@ wire [63:0] game_ddr_din, game_ddr_dout;
 `ifdef JTFRAME_HISCORE
 jtframe_hiscore #(
     .HS_SCOREWIDTH   ( HS_SCOREWIDTH ),
-    .CFG_ADDRESSWIDTH( 4             ),
+    .CFG_ADDRESSWIDTH( HS_CFGWIDTH   ),
     .CFG_LENGTHWIDTH ( 2             )
 ) u_hiscore(
     .clk             ( clk_rom          ),
